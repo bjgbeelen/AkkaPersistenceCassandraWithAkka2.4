@@ -1,6 +1,7 @@
 .class
 *.log
 .history
+.idea
 
 akka-persistence-cassandra.sublime-project
 akka-persistence-cassandra.sublime-workspace
