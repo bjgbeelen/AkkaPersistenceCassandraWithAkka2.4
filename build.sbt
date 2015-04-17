@@ -27,6 +27,8 @@ scalacOptions ++= Seq(
   "-Xfuture"
 )
 
+Revolver.settings
+
 parallelExecution in Test := false
 
 libraryDependencies ++= Seq(
