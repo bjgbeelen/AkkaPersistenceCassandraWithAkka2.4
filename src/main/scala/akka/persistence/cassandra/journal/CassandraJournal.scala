@@ -29,7 +29,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
 
   val preparedWriteHeader = session.prepare(writeHeader)
   val preparedWriteMessage = session.prepare(writeMessage)
-  val preparedConfirmMessage = session.prepare(confirmMessage)
+  // val preparedConfirmMessage = session.prepare(confirmMessage)
   val preparedDeleteLogical = session.prepare(deleteMessageLogical)
   val preparedDeletePermanent = session.prepare(deleteMessagePermanent)
   val preparedSelectHeader = session.prepare(selectHeader).setConsistencyLevel(readConsistency)

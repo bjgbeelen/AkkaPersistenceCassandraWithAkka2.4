@@ -34,8 +34,8 @@ object CassandraIntegrationSpec {
     def receiveRecover: Receive = handle
 
     def receiveCommand: Receive = {
-      case Delete(sequenceNr, permanent) =>
-        deleteMessage(sequenceNr, permanent)
+      // case Delete(sequenceNr, permanent) =>
+      //   deleteMessage(sequenceNr, permanent)
       case DeleteTo(sequenceNr, permanent) =>
         deleteMessages(sequenceNr, permanent)
       case payload: String =>
@@ -66,8 +66,8 @@ object CassandraIntegrationSpec {
         saveSnapshot(last)
       case SaveSnapshotSuccess(_) =>
         probe ! s"snapped-${last}"
-      case Delete(sequenceNr, permanent) =>
-        deleteMessage(sequenceNr, permanent)
+      // case Delete(sequenceNr, permanent) =>
+      //   deleteMessage(sequenceNr, permanent)
       case payload: String =>
         persist(payload)(handle)
 
@@ -103,51 +103,51 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
   def subscribeToConfirmation(probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[Delivered])
 
-  def subscribeToBatchDeletion(probe: TestProbe): Unit =
-    system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.DeleteMessages])
+  // def subscribeToBatchDeletion(probe: TestProbe): Unit =
+  //   system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.DeleteMessages])
 
   def subscribeToRangeDeletion(probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.DeleteMessagesTo])
 
-  def awaitBatchDeletion(probe: TestProbe): Unit =
-    probe.expectMsgType[JournalProtocol.DeleteMessages]
+  // def awaitBatchDeletion(probe: TestProbe): Unit =
+  //   probe.expectMsgType[JournalProtocol.DeleteMessages]
 
   def awaitRangeDeletion(probe: TestProbe): Unit =
     probe.expectMsgType[JournalProtocol.DeleteMessagesTo]
 
-  def testIndividualDelete(processorId: String, permanent: Boolean): Unit = {
-    val deleteProbe = TestProbe()
-    subscribeToBatchDeletion(deleteProbe)
+  // def testIndividualDelete(processorId: String, permanent: Boolean): Unit = {
+  //   val deleteProbe = TestProbe()
+  //   subscribeToBatchDeletion(deleteProbe)
 
-    val processor1 = system.actorOf(Props(classOf[ProcessorA], processorId))
-    1L to 16L foreach { i =>
-      processor1 ! s"a-${i}"
-      expectMsgAllOf(s"a-${i}", i, false)
-    }
+  //   val processor1 = system.actorOf(Props(classOf[ProcessorA], processorId))
+  //   1L to 16L foreach { i =>
+  //     processor1 ! s"a-${i}"
+  //     expectMsgAllOf(s"a-${i}", i, false)
+  //   }
 
-    // delete single message in partition
-    processor1 ! Delete(12L, permanent)
-    awaitBatchDeletion(deleteProbe)
+  //   // delete single message in partition
+  //   processor1 ! Delete(12L, permanent)
+  //   awaitBatchDeletion(deleteProbe)
 
-    system.actorOf(Props(classOf[ProcessorA], processorId))
-    1L to 16L foreach { i =>
-      if (i != 12L) expectMsgAllOf(s"a-${i}", i, true)
-    }
+  //   system.actorOf(Props(classOf[ProcessorA], processorId))
+  //   1L to 16L foreach { i =>
+  //     if (i != 12L) expectMsgAllOf(s"a-${i}", i, true)
+  //   }
 
-    // delete whole partition
-    6L to 10L foreach { i =>
-      processor1 ! Delete(i, permanent)
-      awaitBatchDeletion(deleteProbe)
-    }
+  //   // delete whole partition
+  //   6L to 10L foreach { i =>
+  //     processor1 ! Delete(i, permanent)
+  //     awaitBatchDeletion(deleteProbe)
+  //   }
 
-    system.actorOf(Props(classOf[ProcessorA], processorId))
-    1L to 5L foreach { i =>
-      expectMsgAllOf(s"a-${i}", i, true)
-    }
-    11L to 16L foreach { i =>
-      if (i != 12L) expectMsgAllOf(s"a-${i}", i, true)
-    }
-  }
+  //   system.actorOf(Props(classOf[ProcessorA], processorId))
+  //   1L to 5L foreach { i =>
+  //     expectMsgAllOf(s"a-${i}", i, true)
+  //   }
+  //   11L to 16L foreach { i =>
+  //     if (i != 12L) expectMsgAllOf(s"a-${i}", i, true)
+  //   }
+  // }
 
   def testRangeDelete(processorId: String, permanent: Boolean): Unit = {
     val deleteProbe = TestProbe()
@@ -192,12 +192,12 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       processor2 ! "b"
       expectMsgAllOf("b", 17L, false)
     }
-    "not replay messages marked as deleted" in {
-      testIndividualDelete("p3", false)
-    }
-    "not replay permanently deleted messages" in {
-      testIndividualDelete("p4", true)
-    }
+    // "not replay messages marked as deleted" in {
+    //   testIndividualDelete("p3", false)
+    // }
+    // "not replay permanently deleted messages" in {
+    //   testIndividualDelete("p4", true)
+    // }
     "not replay messages marked as range-deleted" in {
       testRangeDelete("p5", false)
     }
