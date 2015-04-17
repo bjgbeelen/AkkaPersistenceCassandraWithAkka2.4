@@ -6,12 +6,12 @@ import akka.actor.Props
 class SenderActor extends Actor {
 
   override def preStart(): Unit = {
-    val receiver = context.actorOf(Props[ReceiverActor], "receiver")
-    receiver ! ReceiverActor.AddOne
+    val receiver = context.actorOf(Props[CounterActor], "receiver")
+    receiver ! CounterActor.AddOne
   }
 
   def receive = {
-    case ReceiverActor.Done => context.stop(self)
+    case CounterActor.Done => context.stop(self)
   }
 
 }
