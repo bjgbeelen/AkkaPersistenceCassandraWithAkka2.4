@@ -33,8 +33,8 @@ parallelExecution in Test := false
 
 libraryDependencies ++= Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"             % "2.1.5",
-  "com.typesafe.akka"       %% "akka-actor"                       % "2.4-SNAPSHOT",
-  "com.typesafe.akka"       %% "akka-contrib"                  % "2.4-SNAPSHOT",
+  "com.typesafe.akka"      %% "akka-actor"                        % "2.4-SNAPSHOT",
+  "com.typesafe.akka"      %% "akka-contrib"                      % "2.4-SNAPSHOT",
   "com.typesafe.akka"      %% "akka-persistence-experimental"     % "2.4-SNAPSHOT",
   "com.typesafe.akka"      %% "akka-persistence-tck-experimental" % "2.3.9"   % "test",
   "org.scalatest"          %% "scalatest"                         % "2.1.4"   % "test",
