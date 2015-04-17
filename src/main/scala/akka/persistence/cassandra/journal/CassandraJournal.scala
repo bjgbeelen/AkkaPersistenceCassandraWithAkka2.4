@@ -43,7 +43,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
     }
   }
 
-  // Removed in Akka Persistence 2.4-SNAPSHOT
+  // Depecrated in Akka Persistence 2.4-SNAPSHOT
   // def asyncWriteConfirmations(confirmations: Seq[PersistentConfirmation]): Future[Unit] = executeBatch { batch =>
   //   confirmations.foreach { c =>
   //     batch.add((preparedConfirmMessage.bind(c.persistenceId, partitionNr(c.sequenceNr): JLong, c.sequenceNr: JLong, confirmMarker(c.channelId))))
@@ -51,19 +51,20 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   // }
 
   // Removed in Akka Persistence 2.4-SNAPSHOT
-  // def asyncDeleteMessages(messageIds: Seq[PersistentId], permanent: Boolean): Future[Unit] = executeBatch { batch =>
-  //   messageIds.foreach { mid =>
-  //     val stmt =
-  //       if (permanent) preparedDeletePermanent.bind(mid.persistenceId, partitionNr(mid.sequenceNr): JLong, mid.sequenceNr: JLong)
-  //       else preparedDeleteLogical.bind(mid.persistenceId, partitionNr(mid.sequenceNr): JLong, mid.sequenceNr: JLong)
-  //     batch.add(stmt)
-  //   }
-  // }
+  private def asyncDeleteMessages(messageIds: Seq[(String, Long)], permanent: Boolean): Future[Unit] = executeBatch { batch =>
+    messageIds.foreach { tuple =>
+      val (persistenceId, sequenceNr) = tuple
+      val stmt =
+        if (permanent) preparedDeletePermanent.bind(persistenceId, partitionNr(sequenceNr): JLong, sequenceNr: JLong)
+        else preparedDeleteLogical.bind(persistenceId, partitionNr(sequenceNr): JLong, sequenceNr: JLong)
+      batch.add(stmt)
+    }
+  }
 
   def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long, permanent: Boolean): Future[Unit] = {
     val fromSequenceNr = readLowestSequenceNr(persistenceId, 1L)
     val asyncDeletions = (fromSequenceNr to toSequenceNr).grouped(persistence.settings.journal.maxDeletionBatchSize).map { group =>
-      asyncDeleteMessages(group map (PersistentIdImpl(persistenceId, _)), permanent)
+      asyncDeleteMessages(group map ((persistenceId, _)), permanent)
     }
     Future.sequence(asyncDeletions).map(_ => ())
   }
@@ -87,8 +88,9 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
     serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
   }
 
-  private def confirmMarker(channelId: String) =
-    s"C-${channelId}"
+  // Depecrated in Akka Persistence 2.4-SNAPSHOT
+  // private def confirmMarker(channelId: String) =
+  //   s"C-${channelId}"
 
   override def postStop(): Unit = {
     session.close()
