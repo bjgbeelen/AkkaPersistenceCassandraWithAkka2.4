@@ -1,5 +1,6 @@
 package demo
 
+import language.postfixOps
 import akka.actor._
 import akka.persistence._
 import akka.persistence.AtLeastOnceDelivery._
@@ -25,7 +26,7 @@ class CounterActor extends PersistentActor
 
   override val persistenceId = s"persistent-counter-actor"
 
-  context.system.scheduler.schedule(2.seconds, 2.seconds, self, AddOne)
+  context.system.scheduler.schedule(2 seconds, 2 seconds, self, AddOne)
 
   var counter = 0;
 

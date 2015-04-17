@@ -17,6 +17,7 @@ javaOptions in Test += "-Xmx2500M"
 scalacOptions ++= Seq(
   "-encoding", "UTF-8",
   "-feature",
+  "-language:postfixOps",
   "-unchecked",
   "-deprecation",
   //"-Xfatal-warnings",
