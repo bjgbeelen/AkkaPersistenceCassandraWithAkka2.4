@@ -104,9 +104,6 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
 
   testSnapshotStore = Persistence(system).snapshotStoreFor("cassandra-snapshot-store")
 
-  def subscribeToConfirmation(probe: TestProbe): Unit =
-    system.eventStream.subscribe(probe.ref, classOf[Delivered])
-
   def subscribeToRangeDeletion(probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.DeleteMessagesTo])
 

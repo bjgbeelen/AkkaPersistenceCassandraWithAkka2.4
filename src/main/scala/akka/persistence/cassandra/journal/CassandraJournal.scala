@@ -31,7 +31,6 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
 
   val preparedWriteHeader = session.prepare(writeHeader)
   val preparedWriteMessage = session.prepare(writeMessage)
-  val preparedConfirmMessage = session.prepare(confirmMessage)
   val preparedDeleteLogical = session.prepare(deleteMessageLogical)
   val preparedDeletePermanent = session.prepare(deleteMessagePermanent)
   val preparedSelectHeader = session.prepare(selectHeader).setConsistencyLevel(readConsistency)
@@ -44,14 +43,6 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
       batch.add(preparedWriteMessage.bind(m.persistenceId, pnr: JLong, m.sequenceNr: JLong, persistentToByteBuffer(m)))
     }
   }
-
-  @deprecated("deprecated in Akka Persistence 2.4.x", since = "0.4")
-  def asyncWriteConfirmations(confirmations: Seq[(String, Long, String)]): Future[Unit] = executeBatch { batch =>
-    confirmations.foreach { c =>
-      batch.add((preparedConfirmMessage.bind(c._1, partitionNr(c._2): JLong, c._2: JLong, confirmMarker(c._3))))
-    }
-  }
-
   
   private def asyncDeleteMessages(messageIds: Seq[MessageId], permanent: Boolean): Future[Unit] = executeBatch { batch =>
     messageIds.foreach { mid =>
@@ -88,10 +79,6 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   def persistentFromByteBuffer(b: ByteBuffer): PersistentRepr = {
     serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
   }
-
-  @deprecated("deprecated in Akka Persistence 2.4.x", since = "0.4")
-  private def confirmMarker(channelId: String) =
-    s"C-${channelId}"
 
   override def postStop(): Unit = {
     session.close()
