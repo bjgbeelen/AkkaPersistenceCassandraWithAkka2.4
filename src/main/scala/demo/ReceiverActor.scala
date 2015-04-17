@@ -25,7 +25,7 @@ class CounterActor extends PersistentActor
 
   override val persistenceId = s"persistent-counter-actor"
 
-  context.system.scheduler.schedule(2.seconds, 2.seconds, self, AddOne)
+  context.system.scheduler.schedule(2.seconds, 1.seconds, self, AddOne)
 
   var counter = 0;
 
@@ -39,9 +39,9 @@ class CounterActor extends PersistentActor
 
   override def receiveRecover: Receive = {
     case e: Event ⇒ updateState(e)
-    case SnapshotOffer(_, snapshot: Snapshot) => {
+    case SnapshotOffer(_, snapshot: Int) => {
       println(s"Snapshot offered")
-      setDeliverySnapshot(snapshot.deliverySnapshot)
+      counter = snapshot
     }
   }
 
@@ -54,8 +54,9 @@ class CounterActor extends PersistentActor
   def updateState(e: Event) = e match {
     case OneAdded => {
       counter += 1
+      println(s"Executed Event OneAdded $counter")
       if (counter % 10 == 0) {
-        saveSnapshot(Snapshot(getDeliverySnapshot))
+        saveSnapshot(counter)
       }
     }
   }

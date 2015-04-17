@@ -21,6 +21,8 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
 
   import config._
 
+  case class MessageId(persistenceId: String, sequenceNr: Long)
+
   val cluster = clusterBuilder.build
   val session = cluster.connect()
 
@@ -50,13 +52,12 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
     }
   }
 
-  // Removed in Akka Persistence 2.4-SNAPSHOT
-  private def asyncDeleteMessages(messageIds: Seq[(String, Long)], permanent: Boolean): Future[Unit] = executeBatch { batch =>
-    messageIds.foreach { tuple =>
-      val (persistenceId, sequenceNr) = tuple
+  
+  private def asyncDeleteMessages(messageIds: Seq[MessageId], permanent: Boolean): Future[Unit] = executeBatch { batch =>
+    messageIds.foreach { mid =>
       val stmt =
-        if (permanent) preparedDeletePermanent.bind(persistenceId, partitionNr(sequenceNr): JLong, sequenceNr: JLong)
-        else preparedDeleteLogical.bind(persistenceId, partitionNr(sequenceNr): JLong, sequenceNr: JLong)
+        if (permanent) preparedDeletePermanent.bind(mid.persistenceId, partitionNr(mid.sequenceNr): JLong, mid.sequenceNr: JLong)
+        else preparedDeleteLogical.bind(mid.persistenceId, partitionNr(mid.sequenceNr): JLong, mid.sequenceNr: JLong)
       batch.add(stmt)
     }
   }
@@ -64,7 +65,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long, permanent: Boolean): Future[Unit] = {
     val fromSequenceNr = readLowestSequenceNr(persistenceId, 1L)
     val asyncDeletions = (fromSequenceNr to toSequenceNr).grouped(persistence.settings.journal.maxDeletionBatchSize).map { group =>
-      asyncDeleteMessages(group map ((persistenceId, _)), permanent)
+      asyncDeleteMessages(group map (MessageId(persistenceId, _)), permanent)
     }
     Future.sequence(asyncDeletions).map(_ => ())
   }
