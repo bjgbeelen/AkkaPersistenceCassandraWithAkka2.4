@@ -73,6 +73,7 @@ trait CassandraRecovery { this: CassandraJournal =>
           println("What to do in this situation? Does it even exist anymore?")
           // val channelId = marker.substring(2)
           // c = c.update(confirms = channelId +: c.confirms)
+          c = c.update()
         }
       }
     }
