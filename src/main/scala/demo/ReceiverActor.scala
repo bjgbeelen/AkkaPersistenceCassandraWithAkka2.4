@@ -2,6 +2,7 @@ package demo
 
 import akka.actor._
 import akka.persistence._
+import akka.persistence.AtLeastOnceDelivery._
 import scala.concurrent._
 import duration._
 
@@ -12,9 +13,12 @@ object CounterActor {
 
   sealed trait Event
   case object OneAdded extends Event
+
+  private case class Snapshot(deliverySnapshot: AtLeastOnceDeliverySnapshot)
 }
 
-class CounterActor extends PersistentActor {
+class CounterActor extends PersistentActor
+  with AtLeastOnceDelivery {
 
   import CounterActor._
   import context.dispatcher
@@ -35,10 +39,26 @@ class CounterActor extends PersistentActor {
 
   override def receiveRecover: Receive = {
     case e: Event ⇒ updateState(e)
+    case SnapshotOffer(_, snapshot: Snapshot) => {
+      println(s"Snapshot offered")
+      setDeliverySnapshot(snapshot.deliverySnapshot)
+    }
+  }
+
+  override def unhandled(msg: Any): Unit = msg match {
+    case SaveSnapshotSuccess(_)        ⇒ println(s"Snapshot saved!")// ignore but prevent dead-letter warnings
+    case SaveSnapshotFailure(_, cause) ⇒ println(s"Failed to save a snapshot. Cause: $cause")//log.warning("Failed to save a snapshot. Cause: " + cause)
+    case _                             ⇒ super.unhandled(msg)
   }
 
   def updateState(e: Event) = e match {
-    case OneAdded => counter += 1
+    case OneAdded => {
+      counter += 1
+      if (counter % 10 == 0) {
+        saveSnapshot(Snapshot(getDeliverySnapshot))
+      }
+    }
   }
+
 
 }
