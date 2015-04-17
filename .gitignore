@@ -1,3 +1,15 @@
+.class
+*.log
+.history
+
 akka-persistence-cassandra.sublime-project
 akka-persistence-cassandra.sublime-workspace
 target/
+
+# Sublime specific
+sublime.sbt
+*.sublime
+*.sublime-project
+*.sublime-workspace
+
+.DS_Store
