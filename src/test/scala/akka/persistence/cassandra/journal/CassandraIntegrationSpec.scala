@@ -11,7 +11,7 @@ import com.typesafe.config.ConfigFactory
 
 import org.scalatest._
 
-object CassandraIntegrationSpec {
+object CassandraIntegrationSpec extends PluginSpec {
   val config = ConfigFactory.parseString(
     """
       |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
@@ -25,8 +25,9 @@ object CassandraIntegrationSpec {
       |cassandra-journal.port = 9142
       |cassandra-snapshot-store.port = 9142
     """.stripMargin)
+  val system = ActorSystem("test", config)
 
-  case class Delete(snr: Long, permanent: Boolean)
+  def getSnapshotStore: ActorRef = extension.snapshotStoreFor(null)
 
   case class DeleteTo(snr: Long, permanent: Boolean)
 
@@ -34,8 +35,6 @@ object CassandraIntegrationSpec {
     def receiveRecover: Receive = handle
 
     def receiveCommand: Receive = {
-      // case Delete(sequenceNr, permanent) =>
-      //   deleteMessage(sequenceNr, permanent)
       case DeleteTo(sequenceNr, permanent) =>
         deleteMessages(sequenceNr, permanent)
       case payload: String =>
@@ -48,9 +47,11 @@ object CassandraIntegrationSpec {
         sender ! lastSequenceNr
         sender ! recoveryRunning
     }
+
+    override private[persistence] lazy val snapshotStore: ActorRef = getSnapshotStore
   }
 
-  class ProcessorC(val persistenceId: String, probe: ActorRef) extends PersistentActor {
+  class ProcessorC(val persistenceId: String, val probe: ActorRef) extends PersistentActor {
     var last: String = _
 
     def receiveRecover: Receive = {
@@ -66,8 +67,6 @@ object CassandraIntegrationSpec {
         saveSnapshot(last)
       case SaveSnapshotSuccess(_) =>
         probe ! s"snapped-${last}"
-      // case Delete(sequenceNr, permanent) =>
-      //   deleteMessage(sequenceNr, permanent)
       case payload: String =>
         persist(payload)(handle)
 
@@ -78,10 +77,14 @@ object CassandraIntegrationSpec {
         last = s"${payload}-${lastSequenceNr}"
         probe ! s"updated-${last}"
     }
+
+    override private[persistence] lazy val snapshotStore: ActorRef = getSnapshotStore
   }
 
   class ProcessorCNoRecover(override val persistenceId: String, probe: ActorRef) extends ProcessorC(persistenceId, probe) {
     override def preStart() = ()
+
+    override private[persistence] lazy val snapshotStore: ActorRef = getSnapshotStore
   }
 
   class ViewA(val viewId: String, val persistenceId: String, probe: ActorRef) extends PersistentView {
@@ -94,66 +97,65 @@ object CassandraIntegrationSpec {
 
     override def autoUpdateReplayMax: Long = 0
   }
-
 }
 
 import CassandraIntegrationSpec._
 
-class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
+class CassandraIntegrationSpec extends TestKit(CassandraIntegrationSpec.system) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
   def subscribeToConfirmation(probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[Delivered])
 
-  // def subscribeToBatchDeletion(probe: TestProbe): Unit =
-  //   system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.DeleteMessages])
+  def subscribeToBatchDeletion(probe: TestProbe): Unit =
+    system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.DeleteMessagesTo])
 
   def subscribeToRangeDeletion(probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.DeleteMessagesTo])
 
-  // def awaitBatchDeletion(probe: TestProbe): Unit =
-  //   probe.expectMsgType[JournalProtocol.DeleteMessages]
+  def awaitBatchDeletion(probe: TestProbe): Unit =
+    probe.expectMsgType[JournalProtocol.DeleteMessagesTo]
 
   def awaitRangeDeletion(probe: TestProbe): Unit =
     probe.expectMsgType[JournalProtocol.DeleteMessagesTo]
 
-  // def testIndividualDelete(processorId: String, permanent: Boolean): Unit = {
-  //   val deleteProbe = TestProbe()
-  //   subscribeToBatchDeletion(deleteProbe)
+  def testIndividualDelete(persistenceId: String, permanent: Boolean): Unit = {
+    val deleteProbe = TestProbe()
+    subscribeToBatchDeletion(deleteProbe)
 
-  //   val processor1 = system.actorOf(Props(classOf[ProcessorA], processorId))
-  //   1L to 16L foreach { i =>
-  //     processor1 ! s"a-${i}"
-  //     expectMsgAllOf(s"a-${i}", i, false)
-  //   }
+    val processor1 = system.actorOf(Props(classOf[ProcessorA], persistenceId))
+    1L to 16L foreach { i =>
+      processor1 ! s"a-${i}"
+      expectMsgAllOf(s"a-${i}", i, false)
+    }
 
-  //   // delete single message in partition
-  //   processor1 ! Delete(12L, permanent)
-  //   awaitBatchDeletion(deleteProbe)
+    // delete single message in partition
+    processor1 ! DeleteTo(12L, permanent)
+    awaitBatchDeletion(deleteProbe)
 
-  //   system.actorOf(Props(classOf[ProcessorA], processorId))
-  //   1L to 16L foreach { i =>
-  //     if (i != 12L) expectMsgAllOf(s"a-${i}", i, true)
-  //   }
+    system.actorOf(Props(classOf[ProcessorA], persistenceId))
+    1L to 16L foreach { i =>
+      if (i != 12L) expectMsgAllOf(s"a-${i}", i, true)
+    }
 
-  //   // delete whole partition
-  //   6L to 10L foreach { i =>
-  //     processor1 ! Delete(i, permanent)
-  //     awaitBatchDeletion(deleteProbe)
-  //   }
+    // delete whole partition
+    6L to 10L foreach { i =>
+      processor1 ! DeleteTo(i, permanent)
+      awaitBatchDeletion(deleteProbe)
+    }
 
-  //   system.actorOf(Props(classOf[ProcessorA], processorId))
-  //   1L to 5L foreach { i =>
-  //     expectMsgAllOf(s"a-${i}", i, true)
-  //   }
-  //   11L to 16L foreach { i =>
-  //     if (i != 12L) expectMsgAllOf(s"a-${i}", i, true)
-  //   }
-  // }
+    system.actorOf(Props(classOf[ProcessorA], persistenceId))
+    1L to 5L foreach { i =>
+      expectMsgAllOf(s"a-${i}", i, true)
+    }
+    11L to 16L foreach { i =>
+      if (i != 12L) expectMsgAllOf(s"a-${i}", i, true)
+    }
+  }
 
-  def testRangeDelete(processorId: String, permanent: Boolean): Unit = {
+  def testRangeDelete(persistenceId: String, permanent: Boolean): Unit = {
     val deleteProbe = TestProbe()
     subscribeToRangeDeletion(deleteProbe)
 
-    val processor1 = system.actorOf(Props(classOf[ProcessorA], processorId))
+    val processor1 = system.actorOf(Props(classOf[ProcessorA], persistenceId))
     1L to 16L foreach { i =>
       processor1 ! s"a-${i}"
       expectMsgAllOf(s"a-${i}", i, false)
@@ -162,7 +164,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
     processor1 ! DeleteTo(3L, permanent)
     awaitRangeDeletion(deleteProbe)
 
-    system.actorOf(Props(classOf[ProcessorA], processorId))
+    system.actorOf(Props(classOf[ProcessorA], persistenceId))
     4L to 16L foreach { i =>
       expectMsgAllOf(s"a-${i}", i, true)
     }
@@ -170,7 +172,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
     processor1 ! DeleteTo(7L, permanent)
     awaitRangeDeletion(deleteProbe)
 
-    system.actorOf(Props(classOf[ProcessorA], processorId))
+    system.actorOf(Props(classOf[ProcessorA], persistenceId))
     8L to 16L foreach { i =>
       expectMsgAllOf(s"a-${i}", i, true)
     }
@@ -304,7 +306,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       processor1 ! "a"
       expectMsg("updated-a-6")
 
-      processor1 ! Delete(6L, false)
+      processor1 ! DeleteTo(6L, false)
       awaitBatchDeletion(deleteProbe)
 
       val processor2 = system.actorOf(Props(classOf[ProcessorC], "p14", testActor))
@@ -327,7 +329,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       processor1 ! "a"
       expectMsg("updated-a-6")
 
-      processor1 ! Delete(6L, true)
+      processor1 ! DeleteTo(6L, true)
       awaitBatchDeletion(deleteProbe)
 
       val processor2 = system.actorOf(Props(classOf[ProcessorC], "p15", testActor))
@@ -344,7 +346,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       p ! "a"
       expectMsgAllOf("a", 1L, false)
 
-      p ! Delete(1L, true)
+      p ! DeleteTo(1L, true)
       awaitBatchDeletion(deleteProbe)
 
       val r = system.actorOf(Props(classOf[ProcessorA], "p16"))

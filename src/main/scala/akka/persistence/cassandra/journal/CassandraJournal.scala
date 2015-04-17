@@ -29,7 +29,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
 
   val preparedWriteHeader = session.prepare(writeHeader)
   val preparedWriteMessage = session.prepare(writeMessage)
-  // val preparedConfirmMessage = session.prepare(confirmMessage)
+  val preparedConfirmMessage = session.prepare(confirmMessage)
   val preparedDeleteLogical = session.prepare(deleteMessageLogical)
   val preparedDeletePermanent = session.prepare(deleteMessagePermanent)
   val preparedSelectHeader = session.prepare(selectHeader).setConsistencyLevel(readConsistency)
@@ -43,12 +43,12 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
     }
   }
 
-  // Depecrated in Akka Persistence 2.4-SNAPSHOT
-  // def asyncWriteConfirmations(confirmations: Seq[PersistentConfirmation]): Future[Unit] = executeBatch { batch =>
-  //   confirmations.foreach { c =>
-  //     batch.add((preparedConfirmMessage.bind(c.persistenceId, partitionNr(c.sequenceNr): JLong, c.sequenceNr: JLong, confirmMarker(c.channelId))))
-  //   }
-  // }
+  @deprecated("deprecated in Akka Persistence 2.4.x", since = "0.4")
+  def asyncWriteConfirmations(confirmations: Seq[(String, Long, String)]): Future[Unit] = executeBatch { batch =>
+    confirmations.foreach { c =>
+      batch.add((preparedConfirmMessage.bind(c._1, partitionNr(c._2): JLong, c._2: JLong, confirmMarker(c._3))))
+    }
+  }
 
   // Removed in Akka Persistence 2.4-SNAPSHOT
   private def asyncDeleteMessages(messageIds: Seq[(String, Long)], permanent: Boolean): Future[Unit] = executeBatch { batch =>
@@ -88,9 +88,9 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
     serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
   }
 
-  // Depecrated in Akka Persistence 2.4-SNAPSHOT
-  // private def confirmMarker(channelId: String) =
-  //   s"C-${channelId}"
+  @deprecated("deprecated in Akka Persistence 2.4.x", since = "0.4")
+  private def confirmMarker(channelId: String) =
+    s"C-${channelId}"
 
   override def postStop(): Unit = {
     session.close()
